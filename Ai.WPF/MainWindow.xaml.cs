@@ -10,6 +10,8 @@ using System.Windows.Threading;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Documents;
+using System.IO;
+using System.Windows.Media.Imaging;
 
 using System.Linq;
 
@@ -25,6 +27,8 @@ public partial class MainWindow : Window
     private bool _isProcessing = false;
     private CancellationTokenSource _cancellationTokenSource;
     private ScrollViewer _chatScrollViewer;
+    private string _currentImagePath;
+    private BitmapImage _currentImage;
 
     public MainWindow()
     {
@@ -81,18 +85,29 @@ public partial class MainWindow : Window
             return;
 
         string userMessage = UserInputTextBox.Text.Trim();
-        if (string.IsNullOrEmpty(userMessage))
+        bool hasImage = _currentImage != null;
+        
+        // 如果没有文本且没有图片，则不发送
+        if (string.IsNullOrEmpty(userMessage) && !hasImage)
             return;
 
         try
         {
             _isProcessing = true;
 
-            // 添加用户消息
-            Messages.Add(new ChatMessage { Message = userMessage, IsUser = true });
+            // 添加用户消息（包含图片）
+            var userChatMessage = new ChatMessage 
+            { 
+                Message = userMessage, 
+                IsUser = true,
+                Image = _currentImage,
+                ImagePath = _currentImagePath
+            };
+            Messages.Add(userChatMessage);
 
-            // 清空输入框
+            // 清空输入框和图片预览
             UserInputTextBox.Text = string.Empty;
+            RemoveImage_Click(null, null);
 
             // 滚动到底部确保用户消息可见
             ScrollToBottom();
@@ -108,23 +123,41 @@ public partial class MainWindow : Window
             _cancellationTokenSource?.Cancel();
             _cancellationTokenSource = new CancellationTokenSource();
 
-            // 调用DeepSeek API获取流式回复
-            await _deepSeekService.GetStreamingResponseAsync(
-                Messages.ToList(),
-                partialResponse =>
-                {
-                    // 在UI线程上更新消息
-                    Dispatcher.Invoke(() =>
+            // 调用DeepSeek API获取流式回复（包含图片处理）
+            if (hasImage)
+            {
+                // 使用带图片的API调用
+                await _deepSeekService.GetStreamingResponseWithImageAsync(
+                    Messages.ToList(),
+                    partialResponse =>
                     {
-                        aiMessage.Message += partialResponse;
-
-
-                        // 直接滚动到底部即可
-                        ScrollToBottom();
-                    });
-                },
-                _cancellationTokenSource.Token
-            );
+                        // 在UI线程上更新消息
+                        Dispatcher.Invoke(() =>
+                        {
+                            aiMessage.Message += partialResponse;
+                            ScrollToBottom();
+                        });
+                    },
+                    _cancellationTokenSource.Token
+                );
+            }
+            else
+            {
+                // 使用普通文本API调用
+                await _deepSeekService.GetStreamingResponseAsync(
+                    Messages.ToList(),
+                    partialResponse =>
+                    {
+                        // 在UI线程上更新消息
+                        Dispatcher.Invoke(() =>
+                        {
+                            aiMessage.Message += partialResponse;
+                            ScrollToBottom();
+                        });
+                    },
+                    _cancellationTokenSource.Token
+                );
+            }
         }
         catch (Exception ex)
         {
@@ -189,5 +222,75 @@ public partial class MainWindow : Window
         }
     }
 
-   
+    private void InputBox_DragOver(object sender, DragEventArgs e)
+    {
+        // 只接受文件拖放
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            if (files.Length > 0)
+            {
+                string extension = Path.GetExtension(files[0]).ToLower();
+                // 只接受图片文件
+                if (extension == ".jpg" || extension == ".jpeg" || extension == ".png" || extension == ".gif" || extension == ".bmp")
+                {
+                    e.Effects = DragDropEffects.Copy;
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+        
+        e.Effects = DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void InputBox_Drop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            if (files.Length > 0)
+            {
+                string filePath = files[0];
+                string extension = Path.GetExtension(filePath).ToLower();
+                
+                // 检查是否是图片文件
+                if (extension == ".jpg" || extension == ".jpeg" || extension == ".png" || extension == ".gif" || extension == ".bmp")
+                {
+                    try
+                    {
+                        // 加载图片
+                        BitmapImage image = new BitmapImage();
+                        image.BeginInit();
+                        image.CacheOption = BitmapCacheOption.OnLoad;
+                        image.UriSource = new Uri(filePath);
+                        image.EndInit();
+                        
+                        // 保存当前图片信息
+                        _currentImagePath = filePath;
+                        _currentImage = image;
+                        
+                        // 显示图片预览
+                        ImagePreview.Source = image;
+                        ImageNameText.Text = Path.GetFileName(filePath);
+                        ImagePreviewBorder.Visibility = Visibility.Visible;
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"加载图片失败: {ex.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+        }
+    }
+
+    private void RemoveImage_Click(object sender, RoutedEventArgs e)
+    {
+        // 清除当前图片
+        _currentImagePath = null;
+        _currentImage = null;
+        ImagePreview.Source = null;
+        ImagePreviewBorder.Visibility = Visibility.Collapsed;
+    }
 }

@@ -15,6 +15,7 @@
     <Window.Resources>
         <convert:BoolToColorConverter x:Key="BoolToColorConverter" />
         <convert:BoolToAlignmentConverter x:Key="BoolToAlignmentConverter" />
+        <convert:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
@@ -53,38 +54,58 @@
                             HorizontalAlignment="{Binding IsUser, Converter={StaticResource BoolToAlignmentConverter}}"
                             Background="{Binding IsUser, Converter={StaticResource BoolToColorConverter}}"
                             CornerRadius="8">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock
-                                    Grid.Column="0"
-                                    MaxWidth="350"
-                                    IsHitTestVisible="True"
-                                    Text="{Binding Message}"
-                                    TextWrapping="Wrap" />
-                                <Button
-                                    Grid.Column="1"
-                                    Margin="5,0,0,0"
-                                    Padding="3,1"
-                                    Background="Transparent"
-                                    BorderThickness="0"
-                                    Click="CopyButton_Click"
-                                    Content="复制"
-                                    Tag="{Binding Message}"
-                                    Visibility="Collapsed">
-                                    <Button.Style>
-                                        <Style TargetType="Button">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                            </Grid>
+                            <StackPanel>
+                                <!--  图片显示区域  -->
+                                <Image
+                                    MaxWidth="300"
+                                    MaxHeight="200"
+                                    Margin="0,0,0,5"
+                                    HorizontalAlignment="Left"
+                                    Source="{Binding Image}"
+                                    Stretch="Uniform"
+                                    Visibility="{Binding HasImage, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                                <!--  文本显示区域  -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox
+                                        Grid.Column="0"
+                                        MaxWidth="350"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Cursor="IBeam"
+                                        Foreground="Black"
+                                        IsReadOnly="True"
+                                        IsUndoEnabled="False"
+                                        SelectionBrush="#4285F4"
+                                        Text="{Binding Message, Mode=OneWay}"
+                                        TextWrapping="Wrap"
+                                        VerticalScrollBarVisibility="Auto" />
+                                    <Button
+                                        Grid.Column="1"
+                                        Margin="5,0,0,0"
+                                        Padding="3,1"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Click="CopyButton_Click"
+                                        Content="复制"
+                                        Tag="{Binding Message}"
+                                        Visibility="Collapsed">
+                                        <Button.Style>
+                                            <Style TargetType="Button">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -137,22 +158,68 @@
                 <!--  输入框  -->
                 <Border
                     Grid.Row="0"
+                    Padding="10"
+                    AllowDrop="True"
                     Background="White"
                     BorderBrush="#E0E0E0"
                     BorderThickness="1"
-                    CornerRadius="8">
-                    <TextBox
-                        x:Name="UserInputTextBox"
-                        MinHeight="50"
-                        MaxHeight="120"
-                        Padding="10"
-                        VerticalContentAlignment="Center"
-                        AcceptsReturn="True"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        FontSize="14"
-                        TextWrapping="Wrap"
-                        PreviewKeyDown="UserInputTextBox_PreviewKeyDown" />
+                    CornerRadius="8"
+                    DragOver="InputBox_DragOver"
+                    Drop="InputBox_Drop">
+                    <StackPanel Margin="5">
+                        <TextBox
+                            x:Name="UserInputTextBox"
+                            MinHeight="50"
+                            MaxHeight="120"
+                            Margin="5"
+                            Padding="10"
+                            VerticalContentAlignment="Center"
+                            AcceptsReturn="True"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            FontSize="14"
+                            PreviewKeyDown="UserInputTextBox_PreviewKeyDown"
+                            TextWrapping="Wrap" />
+
+                        <!--  图片预览区域  -->
+                        <Border
+                            x:Name="ImagePreviewBorder"
+                            Margin="5"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Bottom"
+                            Background="#F5F5F5"
+                            CornerRadius="4"
+                            Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Image
+                                    x:Name="ImagePreview"
+                                    Grid.Column="0"
+                                    Width="40"
+                                    Height="40"
+                                    Margin="5"
+                                    Stretch="Uniform" />
+                                <TextBlock
+                                    x:Name="ImageNameText"
+                                    Grid.Column="1"
+                                    Margin="5,0"
+                                    VerticalAlignment="Center"
+                                    TextTrimming="CharacterEllipsis" />
+                                <Button
+                                    Grid.Column="2"
+                                    Margin="5"
+                                    Padding="5,0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Click="RemoveImage_Click"
+                                    Content="×" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
                 </Border>
 
                 <!--  底部工具栏  -->
